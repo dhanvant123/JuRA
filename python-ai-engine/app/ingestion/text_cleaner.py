@@ -24,24 +24,41 @@ import re
 
 def fix_hyphenated_line_breaks(text: str) -> str:
     r"""
-    Fixes words that got split across a line break with a hyphen, e.g.:
-        "CONSTI-\nTUTION"  ->  "CONSTITUTION"
+    Rejoins a word/compound that the PDF extractor split across a line break
+    at a hyphen, e.g.:
+        "Auditor-\nGeneral"  ->  "Auditor-General"
+        "sub-\nsection"      ->  "sub-section"
+    by dropping ONLY the newline and keeping the hyphen.
 
-    re.sub(pattern, replacement, text) finds every match of `pattern`
-    inside `text` and replaces it with `replacement`.
+    THE TRAP (a real bug we hit): naively FUSING every "word-\nword" into one
+    word ("subsection", "twothirds") destroys genuine hyphenated compounds that
+    merely happened to wrap at a line break. On the real Constitution PDF that
+    turned "COMPTROLLER AND AUDITOR-\nGENERAL" into "AUDITORGENERAL" and
+    "two-\nthirds" into "twothirds" -- real terms mangled into non-words, which
+    is bad for both citations and vector search (a search for "two-thirds" no
+    longer matches "twothirds").
 
-    Pattern breakdown: r"(\w+)-\n(\w+)"
-        \w+   -> one or more "word characters" (letters/digits/underscore)
-        -     -> a literal hyphen
-        \n    -> a literal newline (line break)
-        \w+   -> one or more word characters again
+    WHY KEEP THE HYPHEN RATHER THAN FUSE: we checked EVERY hyphen-at-line-break
+    in the real extraction. All 42 (24 distinct) with a lowercase continuation
+    were genuine compounds -- "sub-paragraph" (x13), "sub-clause", "sub-section",
+    "socio-economic", "non-agricultural", "co-option", "re-adjustment" -- plus
+    spelled-out amendment ordinals ("Forty-fourth", "Ninety-seventh"). NOT ONE
+    was a true mid-word split ("recom-\nmended" -> "recommended"). Uppercase
+    continuations ("Vice-\nPresident", "inter-\nState") are likewise compounds.
+    So on this corpus, fusing is always wrong and keeping the hyphen is always
+    right; we do the latter unconditionally.
 
-    The parentheses () create "capture groups" -- we can refer back to
-    what they matched using \1 and \2 in the replacement string.
-    So \1\2 means: "the text before the hyphen, directly followed by
-    the text after the hyphen, with the hyphen and line break removed."
+    Limitation: a genuine mid-word split ("recom-\nmended", "consti-\ntution")
+    keeps its hyphen ("recom-mended") instead of fusing. None occur in the
+    Constitution; such splits are rare in justified legal text and mostly occur
+    in running headers, which remove_repeated_lines() strips anyway. Leaving a
+    hyphen in a split word is the lesser error than fusing a real compound.
+    Revisit if an Act (BNS/BNSS/BSA/CrPC/IPC) turns out to be full of true
+    mid-word splits once we can process one end to end.
     """
-    return re.sub(r"(\w+)-\n(\w+)", r"\1\2", text)
+    # Drop only the line break; keep the hyphen so hyphenated compounds
+    # ("sub-section", "Auditor-General", "two-thirds") survive intact.
+    return re.sub(r"(\w+)-\n(\w)", r"\1-\2", text)
 
 
 def collapse_excess_whitespace(text: str) -> str:

@@ -67,11 +67,20 @@ class ChunkMetadata(BaseModel):
     # These are Optional because not every document has every field:
     # the Constitution has "part" + "article", Acts have "chapter" + "section".
     # Default value `None` means the field can be safely left unset.
-    part: Optional[str] = None       # e.g. "Part III" (Constitution only)
-    article: Optional[str] = None    # e.g. "21"        (Constitution only)
-    chapter: Optional[str] = None    # e.g. "Chapter IV" (Acts only)
-    section: Optional[str] = None    # e.g. "103"        (Acts only)
-    section_title: Optional[str] = None
+    #
+    # Each structural level now also has a *_title field holding its SUBJECT
+    # (e.g. Part V's subject "THE UNION", Chapter I's subject "THE EXECUTIVE").
+    # Capturing the subject -- not just the numeral -- is what lets a vector
+    # search for "executive powers" find the right chapter, and lets citations
+    # read "Part V (The Union), Article 52" instead of a bare "Part V".
+    part: Optional[str] = None          # e.g. "Part III"  (Constitution)
+    part_title: Optional[str] = None    # e.g. "Fundamental Rights"
+    article: Optional[str] = None       # e.g. "21" / "21A" (Constitution)
+    article_title: Optional[str] = None # e.g. "Protection of life and personal liberty"
+    chapter: Optional[str] = None       # e.g. "Chapter IV" (Acts / Constitution)
+    chapter_title: Optional[str] = None # e.g. "The Executive"
+    section: Optional[str] = None       # e.g. "103"       (Acts)
+    section_title: Optional[str] = None # e.g. "Punishment for murder"
 
     page: int                   # which PDF page this text came from
     source: str                  # e.g. "India Code", "Legislative Department"
