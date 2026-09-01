@@ -73,6 +73,19 @@ class Settings:
     # Qdrant will reject the vectors (wrong shape) at insert time.
     EMBEDDING_DIMENSION: int = int(os.getenv("EMBEDDING_DIMENSION", "384"))
 
+    # all-MiniLM-L6-v2's real limit -- VERIFIED (via sentence-transformers'
+    # own docs, not assumed): model.max_seq_length reports 256 for this
+    # model, and the maintainer's own published benchmark showed forcing
+    # this SAME model past 256 (to 512) made retrieval quality WORSE (lower
+    # NDCG@10), not better, since it was trained on ~256-token sequences and
+    # doesn't generalize past that. So 256 isn't just "the truncation
+    # point" -- it's the length this model actually performs best at.
+    # Pinned here explicitly (rather than only trusting whatever
+    # model.max_seq_length reports at runtime) so it's visible and
+    # deliberate, the same way EMBEDDING_DIMENSION is -- if we ever switch
+    # models, this MUST be revisited too, exactly like EMBEDDING_DIMENSION.
+    EMBEDDING_MAX_TOKENS: int = int(os.getenv("EMBEDDING_MAX_TOKENS", "256"))
+
     # -------------------------------------------------------------
     # CHUNKING
     # -------------------------------------------------------------
