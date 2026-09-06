@@ -50,7 +50,7 @@ def main() -> None:
         title = md.article_title or md.section_title or ""
         print(f"\n[{i}] {md.document_title} -- {unit} ({title})")
         print(f"    page {md.page}, legal_status={md.legal_status}")
-        preview = chunk.text.split("\n\n", 1)[-1][:200].replace("\n", " ")
+        preview = chunk.text.split("\n\n", 1)[-1][:200].replace("\n", " ") #this line is to basically remove the above document header and print the first 200 characters of the section or article body 
         print(f"    {preview}...")
 
 
