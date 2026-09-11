@@ -1,267 +1,228 @@
-# ⚖️ JuRA - Juristic Retrieval-Augmented Intelligence
+# ⚖️ JuRA - Juristic Retrieval-Augmented Intelligence (Backend)
 
-> **Making Indian Law Understandable Through Explainable AI**
+> **AI-Powered Legal Research & Chat Assistant for Indian Law**
 
-JuRA is an AI-powered legal learning platform that helps citizens, students, and researchers understand Indian laws through evidence-backed explanations. Rather than functioning as a legal advisor, JuRA promotes legal awareness by connecting real-life situations with constitutional provisions, statutory laws, judicial precedents, and authentic legal resources using Retrieval-Augmented Generation (RAG).
-
----
-
-## 📖 Overview
-
-Understanding Indian law can be difficult due to:
-
-- Complex legal terminology
-- Fragmented legal resources
-- Lengthy constitutional and statutory documents
-- Difficulty connecting laws with real-life situations
-
-JuRA aims to bridge this gap by making legal information more accessible, transparent, and educational through Artificial Intelligence.
+JuRA is a production-grade legal research and chat platform tailored to Indian Law (Constitution of India, Bharatiya Nyaya Sanhita, Bharatiya Nagarik Suraksha Sanhita, and Supreme Court Judicial Precedents).
 
 ---
 
-# 🎯 Vision
-
-To make Indian law understandable, accessible, and evidence-driven for everyone.
-
----
-
-# 🚀 Mission
-
-JuRA helps users understand the legal reasoning behind their questions by connecting real-life situations with constitutional provisions, statutory laws, judicial precedents, and educational explanations grounded in authentic legal sources.
-
----
-
-# ✨ Features
-
-### 🤖 AI Legal Assistant
-- Ask legal questions in natural language.
-- Describe real-life legal situations.
-- Receive evidence-backed legal explanations.
-
-### 📜 Constitution Explorer
-- Browse Constitution Articles.
-- Understand Fundamental Rights.
-- Learn Directive Principles.
-- Explore Fundamental Duties.
-
-### ⚖️ Acts & Statutes Explorer
-- Search important Acts.
-- Understand relevant sections.
-- View simplified explanations.
-
-### 🏛 Landmark Judgment Explorer
-- Learn important Supreme Court judgments.
-- Understand legal reasoning.
-- Study judicial precedents.
-
-### 🔍 Semantic Legal Search
-- Search by meaning instead of keywords.
-- Retrieve relevant legal documents using vector search.
-
-### 📚 Legal Learning
-- Plain-language explanations.
-- Related constitutional concepts.
-- Connected Acts and Judgments.
-
-### 📌 Bookmarks
-- Save important Articles.
-- Save judgments.
-- Save conversations.
-
-### 🛠 Admin Dashboard
-- Manage legal datasets.
-- Update legal resources.
-- Monitor system performance.
-
----
-
-# 🏗 System Architecture
+## 🏗 System Architecture
 
 ```text
-                 User
-                   │
-                   ▼
-        React Frontend (Vite)
-                   │
-                   ▼
-            FastAPI Backend
-                   │
-                   ▼
-        Situation Understanding
-                   │
-                   ▼
-        Retrieval-Augmented Generation
-        ┌────────────┬────────────┐
-        ▼            ▼            ▼
- Constitution     Acts      Judgments
-        │            │            │
-        └────────────┴────────────┘
-                   │
-              Qdrant Vector DB
-                   │
-                   ▼
-           Large Language Model
-                   │
-                   ▼
-     Evidence-backed Explanation
+┌──────────────┐          HTTP / JWT          ┌───────────────────────┐
+│              │ ───────────────────────────> │                       │
+│    React     │                              │  Spring Boot Backend  │
+│   Frontend   │ <─────────────────────────── │      (Port 8080)      │
+│              │        Clean JSON DTOs       └───────────┬───────────┘
+└──────────────┘                                          │
+                                                          │ 1. Saves User Msg
+                                                          │ 2. Queries RAG
+                                                          │ 3. Saves AI Msg + Citations
+                                                          ▼
+                                              ┌───────────────────────┐
+                                              │   PostgreSQL (5432)   │
+                                              │ (Users, Sessions,     │
+                                              │  Messages, Bookmarks, │
+                                              │  Legal Items JSONB)   │
+                                              └───────────────────────┘
+                                                          ▲
+                                                          │ Internal Server-to-Server
+                                                          │ HTTP (RestClient)
+                                                          ▼
+                                              ┌───────────────────────┐
+                                              │ Python FastAPI Engine │
+                                              │      (Port 8000)      │
+                                              │  (Qdrant Vector DB +  │
+                                              │   Embeddings + LLM)   │
+                                              └───────────────────────┘
 ```
+
+- **Spring Boot Backend**: Exposes all client-facing REST APIs, handles stateless JWT authentication/authorization, enforces strict resource ownership, manages PostgreSQL persistence, and translates responses into camelCase client DTOs.
+- **Python FastAPI AI Engine**: Internal-only service running RAG pipeline over Indian legal statutes. It is never exposed directly to frontend clients.
+- **PostgreSQL Database**: Relational database with Flyway schema migrations, storing users, chat sessions, chat messages with JSONB citation metadata, legal items, and bookmarks.
 
 ---
 
-# 🧠 Core Workflow
+## 🛠 Tech Stack
+
+- **Language**: Java 21 (LTS)
+- **Framework**: Spring Boot 3.4.3
+- **Security**: Spring Security 6 with Stateless JWT (`io.jsonwebtoken:jjwt:0.12.6`)
+- **Database & Persistence**: PostgreSQL, Spring Data JPA, Hibernate 6 (`@JdbcTypeCode(SqlTypes.JSON)`)
+- **Migrations**: Flyway (`flyway-core`, `flyway-database-postgresql`)
+- **Validation**: Jakarta Bean Validation (`jakarta.validation`)
+- **API Documentation**: OpenAPI 3.0 / Swagger UI (`springdoc-openapi-starter-webmvc-ui`)
+- **HTTP Client**: Spring 6 `RestClient`
+- **Build Tool**: Apache Maven 3.9+
+
+---
+
+## 📋 Database Schema
 
 ```text
-User Query
-      │
-      ▼
-Situation Analysis
-      │
-      ▼
-Legal Domain Detection
-      │
-      ▼
-Retrieve Constitution
-      │
-      ▼
-Retrieve Acts
-      │
-      ▼
-Retrieve Judgments
-      │
-      ▼
-Evidence Ranking
-      │
-      ▼
-Generate Explanation
-      │
-      ▼
-Educational Response
+users (email PK, name, password_hash, role, created_at, ph_no UNIQUE)
+  │
+  ├── 1:N ──> chat_sessions (id UUID PK, email FK, title, created_at)
+  │                 │
+  │                 └── 1:N ──> chat_messages (id UUID PK, chat_session_id FK, role, citation JSONB, content TEXT, created_at, updated_at)
+  │
+  └── 1:N ──> bookmarks (email FK, legal_item_id FK, note TEXT, created_at) [PK: (email, legal_item_id)]
+                    │
+                    └── N:1 ──> legal_items (id UUID PK, type, title, citation JSONB, question TEXT, year INT, source, created_at, updated_at)
 ```
 
 ---
 
-# 🛠 Tech Stack
+## 🚀 Getting Started
 
-## Frontend
+### 1. Prerequisites
 
-- React.js
-- Vite
-- Tailwind CSS
+- **Java 21 JDK** installed (`java -version`)
+- **Maven 3.9+** installed (`mvn -version`)
+- **PostgreSQL 14+** running locally or in cloud
+- **Python 3.10+** (for running the Python AI engine)
 
-## Backend
+### 2. Database Setup
 
-- FastAPI
-- Python
+Create the PostgreSQL database before starting the application:
 
-## AI
-
-- Retrieval-Augmented Generation (RAG)
-- LangChain
-- OpenAI GPT
-- Embedding Models
-
-## Database
-
-- PostgreSQL
-- Qdrant Vector Database
-
-## Authentication
-
-- JWT Authentication
-
-## DevOps
-
-- Docker
-- Git
-- GitHub
-
----
-
-# 📂 Project Structure
-
+```sql
+CREATE DATABASE jura_db;
 ```
-JuRA/
-│
-├── frontend/
-│
-├── backend/
-│
-├── ai/
-│
-├── datasets/
-│
-├── embeddings/
-│
-├── vector_db/
-│
-├── docs/
-│
-├── tests/
-│
-└── README.md
+
+Flyway automatically creates all tables and seeds Indian legal reference data on the first application launch.
+
+### 3. Environment Variables & Configuration
+
+Configure via environment variables or edit `src/main/resources/application.yml`:
+
+| Variable | Description | Default (Local Dev) |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL JDBC Connection URL | `jdbc:postgresql://localhost:5432/jura_db` |
+| `DATABASE_USERNAME` | PostgreSQL User | `postgres` |
+| `DATABASE_PASSWORD` | PostgreSQL Password | `postgres` |
+| `JWT_SECRET` | Base64-encoded 256-bit Secret Key | `404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970` |
+| `JWT_EXPIRATION` | JWT Token Validity (ms) | `86400000` (24 Hours) |
+| `PYTHON_AI_BASE_URL`| Base URL for Python AI Engine | `http://localhost:8000` |
+
+### 4. Running the Spring Boot Backend
+
+Using Maven:
+
+```bash
+# Clean and run unit tests
+mvn clean test
+
+# Run application
+mvn spring-boot:run
+```
+
+The server will start on `http://localhost:8080`.
+
+### 5. Running the Python AI Engine
+
+In a separate terminal:
+
+```bash
+cd python-ai-engine
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
 
-# 🎯 Target Users
+## 📖 API Documentation & Swagger UI
 
-- 👨‍🎓 Law Students
-- 👨‍⚖️ Legal Researchers
-- 👨‍💼 Citizens
-- 👩‍🏫 Educators
+Once running, explore and test the interactive OpenAPI documentation:
 
----
+- **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- **OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
-# 📌 Objectives
-
-- Improve legal awareness.
-- Promote constitutional literacy.
-- Explain the reasoning behind applicable laws.
-- Provide evidence-backed legal information.
-- Simplify legal learning.
-- Reduce misinformation.
-- Encourage self-learning through AI.
+To test secured endpoints in Swagger UI:
+1. Register (`POST /api/auth/register`) or login (`POST /api/auth/login`).
+2. Copy the `token` from the response.
+3. Click the **Authorize** button at the top of Swagger UI and enter `Bearer <your-token>`.
 
 ---
 
-# ⚠ Disclaimer
+## 📡 REST API Overview
 
-JuRA is an educational platform designed to improve legal awareness and constitutional literacy.
+### 1. Authentication
+- `POST /api/auth/register` — Register a new user with BCrypt password hashing.
+- `POST /api/auth/login` — Authenticate and receive a JWT Bearer token.
 
-It **does not provide professional legal advice**, predict judicial outcomes, or replace qualified legal practitioners.
+### 2. User Profile
+- `GET /api/users/me` — Retrieve current authenticated user's profile.
 
-Users should consult a licensed legal professional for case-specific advice.
+### 3. Chat & AI Assistant
+- `POST /api/chat/sessions` — Create a new chat session.
+- `GET /api/chat/sessions` — List all chat sessions for the authenticated user.
+- `GET /api/chat/sessions/{sessionId}/messages` — Fetch message history for a session (with ownership verification).
+- `POST /api/chat/sessions/{sessionId}/messages` — Send a query, invoke Python RAG engine, persist assistant response and structured JSONB citations.
+
+**Sample Send Message Request:**
+```json
+{
+  "content": "What is the punishment for murder under Indian law?",
+  "limit": 5,
+  "documentType": null,
+  "legalStatus": "CURRENT"
+}
+```
+
+**Sample AI Response:**
+```json
+{
+  "message": {
+    "id": "c62f2378-4309-482a-a92c-632b71f92e73",
+    "role": "ASSISTANT",
+    "content": "Under Section 103 of the Bharatiya Nyaya Sanhita, 2023, whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine [1].",
+    "citation": [
+      {
+        "document_title": "Bharatiya Nyaya Sanhita, 2023",
+        "article_or_section": "Section 103",
+        "page": 42,
+        "source": "India Code",
+        "source_url": "https://www.indiacode.nic.in/"
+      }
+    ],
+    "createdAt": "2026-09-11T05:30:00Z"
+  },
+  "citations": [
+    {
+      "documentTitle": "Bharatiya Nyaya Sanhita, 2023",
+      "articleOrSection": "Section 103",
+      "page": 42,
+      "source": "India Code",
+      "sourceUrl": "https://www.indiacode.nic.in/"
+    }
+  ]
+}
+```
+
+### 4. Bookmarks
+- `GET /api/bookmarks` — List all bookmarks for the authenticated user.
+- `POST /api/bookmarks` — Bookmark a legal item with an optional note.
+- `PATCH /api/bookmarks/{legalItemId}` — Update note on a bookmarked item.
+- `DELETE /api/bookmarks/{legalItemId}` — Remove a bookmark.
+
+### 5. Legal Reference Items
+- `GET /api/legal-items` — Paginated list of legal items with query filters (`type`, `year`, `source`, `query`, `page`, `size`, `sortBy`, `direction`).
+- `GET /api/legal-items/{id}` — Retrieve a legal item by its UUID.
+
+### 6. Health Check
+- `GET /api/health` — Spring Boot health endpoint reporting service and subsystem status.
 
 ---
 
-# 🚀 Future Roadmap
+## 🛡 Security & Error Handling
 
-- [ ] Multilingual Support
-- [ ] Voice Assistant
-- [ ] OCR-based Legal Document Analysis
-- [ ] Personalized Learning Paths
-- [ ] AI-powered Legal Timeline
-- [ ] Mobile Application
-- [ ] Legal Quiz Module
-- [ ] State-specific Laws
-- [ ] Real-time Legal Updates
+- **Stateless JWT**: Requests are authenticated via standard `Authorization: Bearer <token>` headers.
+- **Resource Ownership Enforcement**: Chat sessions, messages, and bookmarks strictly enforce user ownership checks matching the authenticated JWT email.
+- **Safe Error Responses**: Global exception handling (`@RestControllerAdvice`) sanitizes all error responses (400, 401, 403, 404, 409, 500, 502/503), preventing leakage of stack traces, SQL queries, or internal keys.
 
 ---
 
-# 🤝 Contributing
-
-Contributions are welcome!
-
-Feel free to fork the repository, open issues, or submit pull requests.
-
----
-
-# 📄 License
+## 📄 License
 
 This project is licensed under the MIT License.
-
----
-
-# ⭐ If you like this project
-
-Give it a ⭐ on GitHub and help spread legal awareness through technology.
